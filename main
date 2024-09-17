@@ -1,0 +1,120 @@
+### Question 1: Are Django signals executed synchronously (in order) or asynchronously (separately)?
+By default, Django signals are executed synchronously. This means that when you trigger a signal, it gets executed immediately and the program waits for the signal to finish before moving on to the next task.
+
+import time
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
+
+# When a user is saved, this signal handler is triggered
+@receiver(post_save, sender=User)
+def my_handler(sender, instance, **kwargs):
+    print("Signal started")
+    time.sleep(5)  # Wait for 5 seconds
+    print("Signal finished")
+
+# Simulating saving a user
+def save_user():
+    print("Saving user...")
+    user = User.objects.create(username='testuser')
+    print("User saved")
+
+save_user()
+
+What will happen?
+First, you’ll see "Saving user..."
+Then, it waits for 5 seconds (during the signal) and prints "Signal started" and "Signal finished"
+Only after that, you’ll see "User saved"
+This proves that signals run in order, and the program waits for them to finish.
+
+
+Question 2: Do Django signals run in the same thread (same flow) as the caller?
+Yes, by default, Django signals run in the same thread as the main code that triggers them. This means they’re part of the same flow and environment.
+
+Proof (Simple Code Example):
+import threading
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
+
+# When a user is saved, this signal handler is triggered
+@receiver(post_save, sender=User)
+def my_handler(sender, instance, **kwargs):
+    print(f"Signal thread: {threading.get_ident()}")  # Get current thread ID
+
+# Simulating saving a user
+def save_user():
+    print(f"Main thread: {threading.get_ident()}")  # Get current thread ID
+    user = User.objects.create(username='testuser')
+
+save_user()
+What will happen?
+Both the main function and the signal will print the same thread ID.
+This proves they run in the same thread.
+
+
+
+Question 3: Do Django signals run in the same database transaction as the caller?
+Yes, signals run in the same database transaction as the code that triggers them. If something fails in the main code, everything, including the signal’s changes, will be rolled back (canceled).
+
+from django.db import transaction
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
+from myapp.models import Profile  # Assume Profile exists
+
+# When a user is saved, this signal handler is triggered
+@receiver(post_save, sender=User)
+def my_handler(sender, instance, **kwargs):
+    print("Signal - Creating Profile")
+    Profile.objects.create(user=instance)  # Create profile when user is saved
+
+# Simulating saving a user with a transaction
+def save_user():
+    try:
+        with transaction.atomic():
+            print("Saving user...")
+            user = User.objects.create(username='testuser')
+            print("User saved")
+            raise Exception("Error to cancel the transaction!")  # This will rollback everything
+    except Exception as e:
+        print(e)
+
+save_user()
+
+What will happen?
+It will save the user and create the profile in the signal, but then an error happens.
+Everything will be rolled back, meaning both the user and profile won’t be saved in the database.
+This shows signals run in the same transaction.
+
+
+Custom Python Class: Rectangle with Iterable Feature
+You need a class Rectangle that stores a length and width, and you can loop over it to get these values.
+class Rectangle:
+    def __init__(self, length: int, width: int):
+        self.length = length
+        self.width = width
+
+    # Allow the class to be iterable
+    def __iter__(self):
+        self._data = [('length', self.length), ('width', self.width)]
+        self._index = 0
+        return self
+    
+    def __next__(self):
+        if self._index < len(self._data):
+            item = self._data[self._index]
+            self._index += 1
+            return {item[0]: item[1]}
+        else:
+            raise StopIteration
+
+# Example usage:
+rect = Rectangle(10, 5)
+for attr in rect:
+    print(attr)
+
+output:-
+{'length': 10}
+{'width': 5}
+
